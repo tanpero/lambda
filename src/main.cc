@@ -301,3 +301,19 @@ String interpret(const String& input) {
     }
 }
 
+int main(int argc, char* argv[]) {
+    std::string input;
+    while (true) {
+        input = readline("λ> ");
+        if (input.empty()) if ((input = readline("λ> ")).empty()) break;
+	    size_t pos = input.find('\\');
+        while (pos != std::string::npos) {
+            input.replace(pos, 1, "λ");
+            pos = input.find('\\', pos + 1);
+        }
+	    add_history(input.c_str());
+        std::cout << " - " << input << " - \n" << interpret(String{ input }) << "\n" << std::endl;
+    }
+    return 0;
+}
+
