@@ -170,3 +170,26 @@ private:
     }
 };
 
+
+// Check if a variable occurs in expression.
+bool occursIn(const String& varName, ExprPtr expr) {
+    if (auto var = std::dynamic_pointer_cast<Variable>(expr)) {
+        return var->name == varName;
+    } else if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(expr)) {
+        return abstraction->param == varName || occursIn(varName, abstraction->body);
+    } else if (auto application = std::dynamic_pointer_cast<Application>(expr)) {
+        return occursIn(varName, application->func) || occursIn(varName, application->arg);
+    }
+    return false;
+}
+
+// Rename variables to avoid from naming conflic.
+String freshName(const String& base, ExprPtr context) {
+    String newName = base;
+    size_t i = 0;
+    while (occursIn(newName, context)) {
+        newName = base + std::to_string(i++);
+    }
+    return newName;
+}
+
