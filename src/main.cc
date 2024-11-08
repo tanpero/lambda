@@ -183,7 +183,7 @@ bool occursIn(const String& varName, ExprPtr expr) {
     return false;
 }
 
-// Rename variables to avoid from naming conflic.
+// Rename variables to avoid from naming conflict.
 String freshName(const String& base, ExprPtr context) {
     String newName = base;
     size_t i = 0;
@@ -191,5 +191,28 @@ String freshName(const String& base, ExprPtr context) {
         newName = base + std::to_string(i++);
     }
     return newName;
+}
+
+// α-Convert: Change the names of parameters to avoid from conflict
+ExprPtr alphaConvert(ExprPtr expr, const String& oldVar, const String& newVar) {
+    if (auto var = std::dynamic_pointer_cast<Variable>(expr)) {
+        if (var->name == oldVar) {
+            return std::make_shared<Variable>(newVar);
+        } else {
+            return var;
+        }
+    } else if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(expr)) {
+        if (abstraction->param == oldVar) {
+            return std::make_shared<Abstraction>(newVar, alphaConvert(abstraction->body, oldVar, newVar));
+        } else {
+            return std::make_shared<Abstraction>(abstraction->param, alphaConvert(abstraction->body, oldVar, newVar));
+        }
+    } else if (auto application = std::dynamic_pointer_cast<Application>(expr)) {
+        return std::make_shared<Application>(
+            alphaConvert(application->func, oldVar, newVar),
+            alphaConvert(application->arg, oldVar, newVar)
+        );
+    }
+    throw std::runtime_error("Unrecognized expression in alpha conversion");
 }
 
