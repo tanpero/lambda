@@ -216,3 +216,88 @@ ExprPtr alphaConvert(ExprPtr expr, const String& oldVar, const String& newVar) {
     throw std::runtime_error("Unrecognized expression in alpha conversion");
 }
 
+// Replace the variable `varName` with `value` in expression.
+ExprPtr substitute(ExprPtr expr, const String& varName, ExprPtr value) {
+    if (auto var = std::dynamic_pointer_cast<Variable>(expr)) {
+        if (var->name == varName) {
+            return value;
+        } else {
+            return var;
+        }
+    } else if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(expr)) {
+        if (abstraction->param == varName) {
+            return abstraction;
+
+        // Prevent free variables from being captured.
+        } else if (occursIn(abstraction->param, value)) {
+            String newParamName = freshName(abstraction->param, value);
+            ExprPtr newBody = alphaConvert(abstraction->body, abstraction->param, newParamName);
+            return std::make_shared<Abstraction>(newParamName, substitute(newBody, varName, value));
+        } else {
+            return std::make_shared<Abstraction>(
+                abstraction->param,
+                substitute(abstraction->body, varName, value)
+            );
+        }
+    } else if (auto application = std::dynamic_pointer_cast<Application>(expr)) {
+        return std::make_shared<Application>(
+            substitute(application->func, varName, value),
+            substitute(application->arg, varName, value)
+        );
+    }
+    throw std::runtime_error("Unrecognized expression in substitution");
+}
+
+// β-Reduce: Obtain the replaced steps.
+ExprPtr betaReduceStep(ExprPtr expr) {
+    if (auto application = std::dynamic_pointer_cast<Application>(expr)) {
+        if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(application->func)) {
+            std::cout << Char{ 0x21aa } << " β-reduce: " << abstraction->param << " <- " << application->arg->toString() << std::endl;
+            return substitute(abstraction->body, abstraction->param, application->arg);
+        } else {
+            return std::make_shared<Application>(
+                betaReduceStep(application->func),
+                betaReduceStep(application->arg)
+            );
+        }
+    } else if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(expr)) {
+        return std::make_shared<Abstraction>(abstraction->param, betaReduceStep(abstraction->body));
+    }
+    return expr;
+}
+
+// Determine if the expression has been reduced to its final form.
+bool isReduced(ExprPtr expr) {
+    if (auto application = std::dynamic_pointer_cast<Application>(expr)) {
+        return !(std::dynamic_pointer_cast<Abstraction>(application->func)) &&
+               isReduced(application->func) && isReduced(application->arg);
+    } else if (auto abstraction = std::dynamic_pointer_cast<Abstraction>(expr)) {
+        return isReduced(abstraction->body);
+    } else if (std::dynamic_pointer_cast<Variable>(expr)) {
+        return true;
+    }
+    return false;
+}
+
+// Reduce expression to the final form.
+ExprPtr betaReduce(ExprPtr expr) {
+    while (!isReduced(expr)) {
+        expr = betaReduceStep(expr);
+    }
+    std::cout << "done." << std::endl;
+    return expr;
+}
+
+// Evaluate and β-Reduce the source expression.
+String interpret(const String& input) {
+    Lexer lexer(input);
+    Parser parser(lexer);
+    try {
+        ExprPtr expression = parser.parse();
+        ExprPtr reducedExpression = betaReduce(expression);
+        return reducedExpression->toString();
+    } catch (const std::exception& e) {
+        return String("Error: ") + e.what();
+    }
+}
+
