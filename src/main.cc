@@ -19,31 +19,30 @@ struct Token {
 class Lexer {
 public:
     Lexer(const String& input) : input(input), position(0) {}
-    
-    Token nextToken() {
-        skipWhitespace();
-        
-        if (position >= input.length()) return Token(TokenType::END);
-        
-        Char current = input[position++];
-        
-        if(current == "λ") {
-            return Token(TokenType::LAMBDA);
+
+    std::vector<Token> tokenize() {
+        std::vector<Token> tokens;
+        while (position < input.length()) {
+            skipWhitespace();
+            if (position >= input.length()) break;
+
+            Char current = input[position++];
+            if (current == "λ") {
+                tokens.emplace_back(TokenType::LAMBDA);
+            } else if (current == ".") {
+                tokens.emplace_back(TokenType::DOT);
+            } else if (current == "(") {
+                tokens.emplace_back(TokenType::LPAREN);
+            } else if (current == ")") {
+                tokens.emplace_back(TokenType::RPAREN);
+            } else if (!isspace(current.toCodepoint()) && !isdigit(current.toCodepoint())) {
+                tokens.emplace_back(TokenType::VARIABLE, current);
+            } else {
+                throw std::runtime_error("Unexpected character encountered");
+            }
         }
-        else if(current == ".") {
-            return Token(TokenType::DOT);
-        }
-        else if(current == "(") {
-            return Token(TokenType::LPAREN);
-        }
-        else if (current == ")") {
-            return Token(TokenType::RPAREN);
-        }
-        else if (!isspace(current.toCodepoint() && !isdigit(current.toCodepoint()))) {
-            return Token(TokenType::VARIABLE, current);
-        }
-        
-        throw std::runtime_error("Unexpected character encountered");
+        tokens.emplace_back(TokenType::END); // Add an END token at the end
+        return tokens;
     }
 
 private:
@@ -96,8 +95,8 @@ public:
 
 class Parser {
 public:
-    Parser(Lexer& lexer) : lexer(lexer), currentToken(lexer.nextToken()) {
-
+    Parser(const std::vector<Token>& tokens) 
+      : tokens(tokens), currentPosition(0), currentToken(tokens[currentPosition]) {
     }
 
     ExprPtr parse() {
@@ -105,11 +104,14 @@ public:
     }
 
 private:
-    Lexer& lexer;
+    std::vector<Token> tokens;
+    size_t currentPosition;
     Token currentToken;
 
     Token nextToken() {
-        currentToken = lexer.nextToken();
+        if (currentPosition < tokens.size() - 1) { // Ensure position is with bounds
+            currentToken = tokens[++currentPosition];
+        }
         return currentToken;
     }
 
@@ -131,7 +133,7 @@ private:
 
             ExprPtr body = parseExpression();
 
-            // 多参数 lambda 被视为嵌套的单参数 lambda
+            // Multi-parameters lambda may be considered as nested single-parameter lambda
             for (auto it = parameters.rbegin(); it != parameters.rend(); ++it) {
                 body = std::make_shared<Abstraction>(*it, body);
             }
@@ -291,7 +293,7 @@ ExprPtr betaReduce(ExprPtr expr) {
 // Evaluate and β-Reduce the source expression.
 String interpret(const String& input) {
     Lexer lexer(input);
-    Parser parser(lexer);
+    Parser parser(lexer.tokenize());
     try {
         ExprPtr expression = parser.parse();
         ExprPtr reducedExpression = betaReduce(expression);
