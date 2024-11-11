@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <algorithm>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "string.hh"
@@ -353,11 +353,11 @@ InputType processBinding(const std::string& input) {
 String interpret(const String& input) {
     InputType inputType = processBinding(input.toUTF8());
     if (inputType == InputType::Binding) {
-	    auto entry = globalMapping.back();
-    	Result result = evaluate(entry.expr);
+        auto entry = globalMapping.back();
+        Result result = evaluate(entry.expr);
         if (!result.isOk) {
-	        globalMapping.pop_back();
-	        return result.value;
+            globalMapping.pop_back();
+            return result.value;
         }
         else return "<" + entry.name + "> " + result.value;
     }
