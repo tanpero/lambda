@@ -362,7 +362,7 @@ String interpret(const String& input) {
         else return "<" + entry.name + "> " + result.value;
     }
     else if (inputType == InputType::Expression) {
-        Result result = evaluate(entry.expr);
+        Result result = evaluate(input);
         return result.value;
     }
     else return "Invalid Syntax";
