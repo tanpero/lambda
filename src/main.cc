@@ -290,17 +290,82 @@ ExprPtr betaReduce(ExprPtr expr) {
     return expr;
 }
 
+struct Result {
+    String value;
+    bool isOk;
+};
+
 // Evaluate and β-Reduce the source expression.
-String interpret(const String& input) {
-    Lexer lexer(input);
-    Parser parser(lexer.tokenize());
+Result evaluate(const String& input) {
     try {
+        Lexer lexer(input);
+        Parser parser(lexer.tokenize());
         ExprPtr expression = parser.parse();
         ExprPtr reducedExpression = betaReduce(expression);
-        return reducedExpression->toString();
+        return { reducedExpression->toString(), true };
     } catch (const std::exception& e) {
-        return String("Error: ") + e.what();
+        return { String("Error: ") + e.what(), false };
     }
+}
+
+struct BindingEntry {
+    String name;
+    String expr;
+};
+
+std::vector<BindingEntry> globalMapping;
+
+enum class InputType {
+    Expression,
+    Binding, InvalidBinding,
+    Assertion, InvalidAssertion,
+};
+
+std::string trim(const std::string& str) {
+    std::string s = str;
+    s.erase(0, std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }) - s.begin());
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base() - s.begin(), s.length());
+    std::replace(s.begin(), s.end(), ' ', '-');
+    return s;
+}
+
+InputType processBinding(const std::string& input) {
+    std::string trimmedInput = input.substr(input.find_first_not_of(' '));
+    if (trimmedInput.substr(0, 4) != "let ") {
+        return InputType::Expression;
+    }
+    size_t wordStart = 4;
+    size_t wordEnd = trimmedInput.find('=', wordStart);
+    if (wordEnd == std::string::npos) {
+        return InputType::InvalidBinding;
+    }
+    String word = trim(trimmedInput.substr(wordStart, wordEnd - wordStart));
+    String expression = trimmedInput.substr(wordEnd + 1);
+    globalMapping.push_back({ word, expression });
+    return InputType::Binding;
+}
+
+
+String interpret(const String& input) {
+    InputType inputType = processBinding(input.toUTF8());
+    if (inputType == InputType::Binding) {
+	    auto entry = globalMapping.back();
+    	Result result = evaluate(entry.expr);
+        if (!result.isOk) {
+	        globalMapping.pop_back();
+	        return result.value;
+        }
+        else return "<" + entry.name + "> " + result.value;
+    }
+    else if (inputType == InputType::Expression) {
+        Result result = evaluate(entry.expr);
+        return result.value;
+    }
+    else return "Invalid Syntax";
 }
 
 int main(int argc, char* argv[]) {
@@ -308,12 +373,12 @@ int main(int argc, char* argv[]) {
     while (true) {
         input = readline("λ> ");
         if (input.empty()) if ((input = readline("λ> ")).empty()) break;
-	    size_t pos = input.find('\\');
+        size_t pos = input.find('\\');
         while (pos != std::string::npos) {
             input.replace(pos, 1, "λ");
             pos = input.find('\\', pos + 1);
         }
-	    add_history(input.c_str());
+        add_history(input.c_str());
         std::cout << " - " << input << " - \n" << interpret(String{ input }) << "\n" << std::endl;
     }
     return 0;
